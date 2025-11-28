@@ -1,0 +1,58 @@
+#ifndef CXD_CORE_H
+#define CXD_CORE_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+// --- LIBRARY CONFIGURATION ---
+#define CXD_VERSION "2.0.0-National"
+#define HASH_LEN 65
+
+// --- DATA STRUCTURES ---
+
+// The "Toxic" struct containing raw location data.
+// This is strictly ephemeral and wiped from RAM after validation.
+typedef struct {
+    double lat;
+    double lon;
+    int ping_ms;
+} CxD_GeoContext;
+
+// The Result struct returned after processing a vote
+typedef struct {
+    char vote_hash[HASH_LEN];
+    float confidence_score;
+    bool accepted;
+    bool is_provisional; // True if score is 0.5 - 0.79 (needs audit)
+    const char* status_msg;
+} CxD_VoteResult;
+
+// --- PUBLIC API ---
+
+// 1. Lifecycle
+// Initializes Bloom Filters, buffers, and loads existing DB state.
+// Returns 0 on success.
+int CxD_Init(const char* db_path, const char* pepper_key);
+
+// 2. Cleanup
+// Flushes remaining buffers to disk and frees memory.
+void CxD_Shutdown();
+
+// 3. The Main Entry Point
+// - Validates hardware signature
+// - Validates location (privacy-preserving)
+// - Checks duplicates (Bloom Filter)
+// - Calculates probability score
+// - Persists to disk (Batch Write)
+CxD_VoteResult CxD_ProcessVote(
+    const char* device_uuid, 
+    const char* payload, 
+    const char* signature, 
+    CxD_GeoContext* location_data
+);
+
+// 4. Maintenance
+// Forces a flush of the write buffer to disk.
+void CxD_FlushDisk();
+
+#endif
