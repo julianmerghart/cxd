@@ -1,0 +1,102 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <math.h>
+
+// --- PRIVACY CONFIGURATION ---
+// We define a struct that isolates location data.
+// This structure is NEVER written to disk.
+typedef struct {
+    double lat;
+    double lon;
+    int ping_ms;
+} EphemeralGeoData;
+
+// Mock Decryption (In production: use OpenSSL RSA_private_decrypt)
+// This simulates taking an encrypted blob and turning it into raw coords in RAM
+void decrypt_location_data(const char* encrypted_blob, EphemeralGeoData* out_data) {
+    // ... Decryption Logic ...
+    // Simulation:
+    out_data->lat = 6.927;
+    out_data->lon = 79.861;
+    out_data->ping_ms = 20;
+}
+
+// 1. The Validation Logic (Same as before, but encapsulated)
+int internal_boundary_check(EphemeralGeoData *data) {
+    // Simplified Sri Lanka Bounding Box for simulation
+    if (data->lat > 5.9 && data->lat < 9.9 && 
+        data->lon > 79.0 && data->lon < 82.0 && 
+        data->ping_ms < 60) {
+        return 1; // Valid
+    }
+    return 0; // Invalid
+}
+
+// 2. The Secure Wrapper
+// This is the ONLY function the main server calls.
+// It handles the lifecycle of the sensitive data.
+int validate_and_wipe(const char* encrypted_location_blob) {
+    int is_valid = 0;
+    
+    // Step A: Allocate memory ONLY in the stack (local scope)
+    EphemeralGeoData sensitive_data;
+    
+    // Step B: Decrypt into this local variable
+    decrypt_location_data(encrypted_location_blob, &sensitive_data);
+    
+    // Step C: Perform the Math
+    is_valid = internal_boundary_check(&sensitive_data);
+    
+    // Step D: THE PRIVACY FIX - Secure Wipe
+    // We overwrite the memory location with zeros immediately.
+    // Even if the server crashes and dumps core memory, this data is gone.
+    // explicit_bzero is preferred, but memset is standard C.
+    memset(&sensitive_data, 0, sizeof(EphemeralGeoData));
+    
+    // Compiler Barrier to prevent optimization from removing the memset
+    __asm__ volatile("" : : "r"(&sensitive_data) : "memory");
+
+    if (is_valid) {
+        printf("[PRIVACY] Location verified. Coordinates wiped from RAM.\n");
+        return 1;
+    } else {
+        printf("[PRIVACY] Location check failed. Coordinates wiped from RAM.\n");
+        return 0;
+    }
+}
+
+// Integration Example
+int main() {
+    const char* user_encrypted_packet = "enc_data_xyz_123";
+    
+    if (validate_and_wipe(user_encrypted_packet)) {
+        // Only NOW do we call the batch writer to save the VOTE.
+        // We do NOT pass the location data to the writer.
+        // persist_vote_optimized(vote_hash); 
+        printf("Proceeding to write vote to disk...\n");
+    } else {
+        printf("Vote rejected.\n");
+    }
+    
+    return 0;
+}
+
+
+### How this integrates with `cxd_batch_writer.c`
+
+This is critical: **The Batch Writer file you have open on the right should NEVER know about coordinates.**
+
+Your data pipeline must look like this to ensure privacy:
+
+1.  **Input:** Server receives `Packet { VoteHash, EncryptedLocation }`.
+2.  **Privacy Check:** Call `validate_and_wipe(EncryptedLocation)`.
+    * This function decrypts, checks math, and **destroys** the location.
+    * It returns `TRUE` or `FALSE`.
+3.  **Persistence:**
+    * If `TRUE`: Pass **only** `VoteHash` to `persist_vote_optimized()` in `cxd_batch_writer.c`.
+    * If `FALSE`: Drop everything.
+
+
+
+By separating the **Validation Logic** (which sees location) from the **Persistence Logic** (which writes to disk), you ensure that `cxd_votes.db` on the hard drive never contains a single byte of location data, effectively making the system GDPR/Privacy compliant even in a hostile environment.
