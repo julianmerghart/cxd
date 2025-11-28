@@ -1,0 +1,17 @@
+#!/bin/bash
+
+echo "--- BUILDING CxD CORE LIBRARY ---"
+
+# 1. Compile Object File (-fPIC for Position Independent Code)
+# We link OpenSSL (-lssl -lcrypto) for the hashing functions
+gcc -c -fPIC cxd_core.c -o cxd_core.o
+
+# 2. Create Shared Library (.so)
+gcc -shared -o libcxd.so cxd_core.o -lssl -lcrypto
+
+echo "--- BUILD COMPLETE ---"
+echo "Library: libcxd.so"
+echo "Header:  cxd_core.h"
+echo ""
+echo "Usage Example (compiling an app that uses this library):"
+echo "gcc -L. -Wall -o my_app my_app.c -lcxd -lssl -lcrypto"
