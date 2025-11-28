@@ -4,12 +4,6 @@ import stat
 
 # --- DEFINING FILE CONTENTS ---
 
-readme_content = """# CxD LKA: Digital Governance Infrastructure for Sri Lanka
-
-**CxD LKA** is an open-source, emergency digital governance framework designed to establish a "Shadow Constituent Assembly" or interim council support system during periods of governmental instability.
-
-It operates on a **federated, tokenless architecture** utilizing donated cloud capacity, ensuring high availability and censorship resistance without the financial friction of gas fees.
-
 ## 🏗 System Architecture
 
 The system is composed of three distinct layers:
