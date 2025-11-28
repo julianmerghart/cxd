@@ -1,86 +1,63 @@
-CxD LKA: Digital Governance Infrastructure for Sri Lanka
+The CxD System: Algorithmic Sovereignty
 
-CxD LKA is an open-source, emergency digital governance framework designed to establish a "Shadow Constituent Assembly" or interim council support system during periods of governmental instability.
+CxD is a digital governance infrastructure designed to function without human politicians. 
 
-It operates on a federated, tokenless architecture utilizing donated cloud capacity, ensuring high availability and censorship resistance without the financial friction of gas fees.
+It replaces the "State" with a transparent, open-source protocol running on a federated grid of donated cloud servers. 
 
-🏗 System Architecture
+It operates on the principle of 1 Device = 1 Vote, enforcing democratic will through code rather than elected representatives.
 
-The system is composed of three distinct layers:
+1. The Infrastructure: The "Headless" State
 
-The Client (Mobile PWA): A React-based Progressive Web App.
+Unlike traditional governments that rely on centralized datacenters or blockchains that rely on expensive mining, CxD uses a Federated Volunteer Grid.
 
-Zero-Knowledge UI: Simulates Secure Enclave signing for anonymity.
+The Nodes (C Server): Lightweight, containerized servers (Docker) that run on Azure, AWS, or private hardware. They are donated by citizens or NGOs.
 
-Offline-First: High-contrast, low-bandwidth design for unstable power grids.
+The Consensus (FBA): Instead of "Proof of Work" (burning energy), the system uses Federated Byzantine Agreement (FBA). Each node selects a list of other nodes it trusts (a "Quorum Slice"). A transaction (vote or UBI claim) is only finalized when a mathematical threshold of these nodes agrees. This makes the system resilient; if the government shuts down the internet in Colombo, nodes in Kandy or Jaffna can continue the ledger.
 
-UBI Wallet: Integrated distribution mechanism for emergency digital aid.
+Gasless: There are no transaction fees. The cost is borne by the infrastructure donors, removing financial barriers to voting.
 
-The Node (Consensus Engine): A lightweight C server.
+2. The Identity: Hardware is the Voter
 
-Federated Byzantine Agreement (FBA): Uses Quorum Slices to reach consensus without mining.
+To prevent "Sybil Attacks" (one person faking million votes) without using intrusive National IDs, CxD relies on Hardware Attestation.
 
-Hardware Attestation: Verifies votes via device-bound keys (1 Device = 1 Vote) to prevent Sybil attacks.
+Secure Enclave: When a citizen votes via the mobile app, the app asks the phone’s dedicated security chip (Secure Enclave on iOS/Titan M on Android) to sign the data.
 
-Persistence: Append-only log storage with salted hashing for privacy.
+1 Device = 1 Vote: The server verifies that the signature came from a unique, physical piece of silicon, not a software bot.
 
-The Ops Layer (Azure/Docker):
+Privacy (Salted Hashing): The server sees the device's Unique ID, but immediately "salts" and hashes it. This creates a one-way cryptographic link. The system knows that you voted, but mathematically cannot calculate who you are, protecting citizens from state retaliation.
 
-Automated deployment scripts for Azure Container Instances.
+3. The Economy: Crypto-UBI
 
-Geo-redundant configurations optimized for South Asia (Central India region).
+The system bypasses the frozen banking sector to deliver direct economic aid.
 
-🚀 Quick Start
+LKR-X: An internal digital ledger currency.
 
-Prerequisites
+Distribution: Every verified device can claim a daily UBI grant (e.g., 2,500 LKR-X) by signing a "Claim" transaction.
 
-Node.js v18+
+The Wallet: The mobile app acts as a wallet, allowing peer-to-peer transfers for food and essential services, effectively creating a parallel economy that the failed central bank cannot devalue.
 
-Docker & Azure CLI
+4. The Governance: No Politicians
 
-GCC (for local server testing)
+This is the core innovation. 
 
-1. Run the Client
+Instead of electing representatives for 5 years (who may become corrupt), the system uses Cryptographic Sortition (Random Selection).
 
-cd client
-npm install
-npm start
+The Repository as Constitution: The "Laws" are literally the code files (App.jsx for ballot measures, cxd_node.c for consensus rules).
 
+Juror Merges: To change a law (e.g., "Increase UBI" or "Add a Referendum"), a developer submits a code change.
 
+Random Witnessing: The system randomly selects 5 anonymous citizens from the verified user pool. These 5 citizens receive a notification to review and digitally "sign" the change.
 
-2. Build the Server Node
+Ephemeral Authority: Once they sign (or reject), their power vanishes. They cannot be bribed because nobody knows who they will be until the moment they are selected.
 
-cd server
-docker build -t cxd-node .
-docker run -p 80:80 cxd-node
+5. The Safeguards against Dictatorship
 
+To prevent the developers or server owners from becoming new dictators, "Constitutional Guardrails" are hard-coded into the system:
 
+The Dead Man’s Switch: If the repository does not receive a "Heartbeat" verify-commit every 30 days, the entire system locks into "Read-Only" mode. This prevents a captured system from running indefinitely in secret.
 
-3. Deploy to Azure (Emergency Mode)
+The Right to Fork: Because the data is on a public ledger and the code is Open Source, if the system becomes corrupt, the citizenry can "Fork" it—copying the ledger to new servers and ignoring the old ones—instantly dissolving the corrupt government's authority.
 
-cd ops
-./deploy_national_emergency.sh
+Summary
 
-
-
-🛡 Security & Privacy
-
-No PII Storage: We do not store names or national IDs.
-
-Salted Hashing: Device UUIDs are salted before hashing to prevent reverse-lookup by state actors.
-
-Source Transparency: All consensus logic is verifiable in server/cxd_node.c.
-
-🤝 Contributing
-
-This is a humanitarian open-source project. We welcome PRs for:
-
-Localization (Tamil/Sinhala) improvements.
-
-Low-bandwidth optimization.
-
-Integration with alternative identity providers.
-
-MIT License. Free for use by any sovereign people.
-
-📄 License
+CxD is not just a voting app; it is a full-stack replacement for the executive and legislative branches. It uses cryptography to replace trust, hardware to replace ID cards, and random juries to replace politicians.v
