@@ -1,0 +1,81 @@
+import time
+import hashlib
+import random
+import statistics
+
+# --- CONFIGURATION ---
+TARGET_VOTERS = 50000        # Number of votes to simulate
+REPORT_INTERVAL = 5000       # Report speed every N votes
+SERVER_LATENCY_MS = 0.05     # Simulated Azure Network Latency (50ms)
+DISK_WRITE_MS = 0.002        # Simulated Disk Append Time (2ms)
+
+# --- THE SERVER LOGIC (Mimicking cxd_node.c) ---
+class CxdServerSimulation:
+    def __init__(self):
+        # This mimics 'DeviceRegistry ram_cache[MAX_VOTES]'
+        self.ram_cache = [] 
+        self.salt = "LKA_SECURE_KEY"
+
+    def process_vote(self, device_uuid):
+        # 1. Hashing (Fast)
+        salted_input = f"{device_uuid}{self.salt}"
+        hex_hash = hashlib.sha256(salted_input.encode()).hexdigest()
+
+        # 2. THE BOTTLENECK: Linear Scan Check
+        # Mimics: for (int i = 0; i < cache_count; i++) ...
+        for existing_hash in self.ram_cache:
+            if existing_hash == hex_hash:
+                return False # Duplicate
+
+        # 3. Memory Write
+        self.ram_cache.append(hex_hash)
+
+        # 4. Disk Persistence Simulation
+        time.sleep(DISK_WRITE_MS) 
+        
+        return True
+
+# --- THE SIMULATION RUNNER ---
+def run_simulation():
+    print(f"--- STARTING CxD BOTTLENECK TEST ---")
+    print(f"Simulating {TARGET_VOTERS} voters interacting with the linear ledger.")
+    
+    server = CxdServerSimulation()
+    batch_times = []
+    start_time = time.time()
+    
+    for i in range(1, TARGET_VOTERS + 1):
+        # Generate random UUID
+        uuid = f"device-{random.randint(1000000, 9999999)}"
+        
+        t0 = time.time()
+        
+        # Simulate Network Latency (Azure to Mobile)
+        time.sleep(SERVER_LATENCY_MS)
+        
+        # Process Vote
+        server.process_vote(uuid)
+        
+        dt = time.time() - t0
+        batch_times.append(dt)
+
+        # REPORTING
+        if i % REPORT_INTERVAL == 0:
+            avg_time = statistics.mean(batch_times[-REPORT_INTERVAL:])
+            vps = 1.0 / avg_time
+            print(f"[votes processed: {i}] Speed: {vps:.2f} votes/sec | Avg Latency: {avg_time*1000:.2f}ms")
+
+    total_time = time.time() - start_time
+    print(f"\n--- SIMULATION COMPLETE ---")
+    print(f"Total Time: {total_time:.2f} seconds")
+    print(f"Final Registry Size: {len(server.ram_cache)}")
+    
+    # Analysis
+    if len(server.ram_cache) > 10000 and (batch_times[-1] > batch_times[0] * 1.5):
+        print("\n⚠️ CRITICAL BOTTLENECK DETECTED")
+        print("The server slowed down significantly as the registry grew.")
+        print("Reason: Linear Search (O(N)) in the duplicate check.")
+        print("Recommendation: Switch C code to use a Hash Map or Bloom Filter (O(1)).")
+
+if __name__ == "__main__":
+    run_simulation()
