@@ -1,0 +1,150 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h>
+
+// --- CONFIGURATION & WEIGHTS ---
+#define W_HARDWARE 0.4f  // Weight for Valid Hardware Signature
+#define W_GEO      0.3f  // Weight for GPS Boundary Match
+#define W_PHYSICS  0.3f  // Weight for Latency/Ping Verification
+
+#define THRESHOLD_CONFIRM 0.8f
+#define THRESHOLD_AUDIT   0.5f
+
+#define BATCH_SIZE 1000
+#define HASH_LEN 65
+
+// --- DATA STRUCTURES ---
+
+typedef struct {
+    char vote_hash[HASH_LEN];
+    float probability_score;
+    int is_provisional; // 1 = Audit Needed, 0 = Confirmed
+} WeightedVote;
+
+// RAM Buffer for Batch Writing (From cxd_batch_writer.c)
+typedef struct {
+    WeightedVote buffer[BATCH_SIZE];
+    int count;
+} ScoreBuffer;
+
+ScoreBuffer disk_buffer;
+
+// --- SCORING ENGINE ---
+
+// 1. Physics Check (Latency)
+// Returns a score between 0.0 and 1.0 based on ping
+float score_physics(int ping_ms) {
+    if (ping_ms < 0) return 0.0f;
+    if (ping_ms < 20) return 1.0f;  // Excellent (Local ISP)
+    if (ping_ms < 60) return 0.8f;  // Good (National Fiber)
+    if (ping_ms < 150) return 0.2f; // Suspicious (VPN/Satellite)
+    return 0.0f;                    // Impossible (Foreign)
+}
+
+// 2. The Main Calculator
+float calculate_vote_confidence(int valid_sig, int in_boundary, int ping_ms) {
+    float score = 0.0f;
+
+    // Hardware Attestation (Binary)
+    if (valid_sig) {
+        score += W_HARDWARE;
+    } else {
+        // If hardware check fails, the vote is worthless.
+        // Returning 0 forces immediate rejection.
+        return 0.0f; 
+    }
+
+    // Geographic Boundary (Binary)
+    if (in_boundary) {
+        score += W_GEO;
+    }
+
+    // Physics/Latency (Gradient)
+    score += (score_physics(ping_ms) * W_PHYSICS);
+
+    return score;
+}
+
+// --- PERSISTENCE LAYER (Modified Batch Writer) ---
+
+void flush_scores_to_disk() {
+    if (disk_buffer.count == 0) return;
+
+    // We write to two different ledgers based on quality
+    FILE *fp_confirmed = fopen("cxd_ledger_confirmed.db", "a");
+    FILE *fp_audit = fopen("cxd_ledger_provisional.db", "a");
+
+    if (!fp_confirmed || !fp_audit) {
+        perror("CRITICAL: Disk Write Failed");
+        return;
+    }
+
+    for (int i = 0; i < disk_buffer.count; i++) {
+        WeightedVote *v = &disk_buffer.buffer[i];
+        
+        if (v->is_provisional) {
+            // Low confidence: Write to Audit log
+            fprintf(fp_audit, "%s | Score: %.2f\n", v->vote_hash, v->probability_score);
+        } else {
+            // High confidence: Write to Main Ledger
+            fprintf(fp_confirmed, "%s | Score: %.2f\n", v->vote_hash, v->probability_score);
+        }
+    }
+    
+    fclose(fp_confirmed);
+    fclose(fp_audit);
+    
+    printf("[DISK] Flushed %d scored votes to storage.\n", disk_buffer.count);
+    disk_buffer.count = 0;
+}
+
+// --- MAIN PIPELINE ---
+
+void process_vote_stream(const char* vote_hash, int has_sig, int gps_ok, int ping) {
+    
+    // 1. Calculate Risk / Probability
+    float confidence = calculate_vote_confidence(has_sig, gps_ok, ping);
+    
+    // 2. Filter Trash
+    if (confidence < THRESHOLD_AUDIT) {
+        printf("[REJECT] Vote %s score %.2f too low.\n", vote_hash, confidence);
+        return; // Drop packet
+    }
+
+    // 3. Add to Batch Buffer
+    WeightedVote *v = &disk_buffer.buffer[disk_buffer.count];
+    strcpy(v->vote_hash, vote_hash);
+    v->probability_score = confidence;
+    v->is_provisional = (confidence < THRESHOLD_CONFIRM); // Flag for audit if needed
+
+    disk_buffer.count++;
+
+    // 4. Flush if full (Optimization)
+    if (disk_buffer.count >= BATCH_SIZE) {
+        flush_scores_to_disk();
+    }
+}
+
+// Simulation Runner
+int main() {
+    printf("--- CxD PROBABILISTIC NODE ACTIVE ---\n");
+    printf("Acceptance Threshold: %.2f\n", THRESHOLD_CONFIRM);
+    
+    // Scenario A: Perfect Voter (Colombo, 15ms ping, Valid Sig)
+    // Score: 0.4 + 0.3 + (1.0 * 0.3) = 1.0 -> CONFIRMED
+    process_vote_stream("hash_citizen_A", 1, 1, 15);
+
+    // Scenario B: VPN Voter (Colombo GPS, but 180ms ping, Valid Sig)
+    // Score: 0.4 + 0.3 + (0.0 * 0.3) = 0.7 -> PROVISIONAL (Audit)
+    process_vote_stream("hash_citizen_B_VPN", 1, 1, 180);
+
+    // Scenario C: Bot Farm (No Hardware Sig)
+    // Score: 0.0 -> REJECT
+    process_vote_stream("hash_bot_farm", 0, 1, 20);
+
+    // Flush remaining buffer
+    flush_scores_to_disk();
+
+    return 0;
+}
