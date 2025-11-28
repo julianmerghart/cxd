@@ -60,4 +60,4 @@ The Right to Fork: Because the data is on a public ledger and the code is Open S
 
 Summary
 
-CxD is not just a voting app; it is a full-stack replacement for the executive and legislative branches. It uses cryptography to replace trust, hardware to replace ID cards, and random juries to replace politicians.v
+CxD is not just a voting app; it is a full-stack replacement for the executive and legislative branches. It uses cryptography to replace trust, hardware to replace ID cards, and random juries to replace politicians.
