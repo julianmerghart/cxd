@@ -1,0 +1,194 @@
+#include "cxd_core.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <math.h>
+#include <openssl/sha.h>
+
+// --- INTERNAL CONSTANTS ---
+#define BATCH_SIZE 1000
+#define BLOOM_SIZE 33554432 // 32MB Bloom Filter
+#define W_HARDWARE 0.4f
+#define W_GEO 0.3f
+#define W_PHYSICS 0.3f
+#define THRESHOLD_CONFIRM 0.8f
+#define THRESHOLD_AUDIT 0.5f
+
+// --- GLOBAL STATE ---
+static uint8_t *bloom_filter = NULL;
+static char *global_pepper = NULL;
+static char global_db_path[256];
+
+typedef struct {
+    char entry[128]; // Pre-formatted log line
+} WriteBufferItem;
+
+static struct {
+    WriteBufferItem items[BATCH_SIZE];
+    int count;
+} write_buffer;
+
+// --- INTERNAL: BLOOM FILTER LOGIC ---
+static void bloom_set(const unsigned char *hash) {
+    uint32_t *indices = (uint32_t*)hash;
+    for (int i = 0; i < 4; i++) {
+        uint32_t idx = indices[i] % (BLOOM_SIZE * 8);
+        bloom_filter[idx / 8] |= (1 << (idx % 8));
+    }
+}
+
+static bool bloom_check(const unsigned char *hash) {
+    uint32_t *indices = (uint32_t*)hash;
+    for (int i = 0; i < 4; i++) {
+        uint32_t idx = indices[i] % (BLOOM_SIZE * 8);
+        if (!(bloom_filter[idx / 8] & (1 << (idx % 8)))) return false;
+    }
+    return true; // Maybe exists
+}
+
+// --- INTERNAL: PRIVACY & GEOFENCE ---
+static bool verify_geofence(CxD_GeoContext *geo) {
+    // 1. Physics Check (Speed of Light)
+    // 60ms allows for ~6000km round trip (generous regional radius)
+    if (geo->ping_ms < 0 || geo->ping_ms > 60) return false;
+
+    // 2. Geometry Check (Simplified Sri Lanka Bounding Box)
+    // In production, implement Ray Casting here.
+    if (geo->lat > 5.9 && geo->lat < 9.9 && 
+        geo->lon > 79.0 && geo->lon < 82.0) {
+        return true;
+    }
+    return false;
+}
+
+// --- INTERNAL: BATCH PERSISTENCE ---
+void CxD_FlushDisk() {
+    if (write_buffer.count == 0) return;
+
+    FILE *fp = fopen(global_db_path, "a");
+    if (!fp) {
+        perror("[CxD] Critical: Disk Write Failed");
+        return;
+    }
+
+    for (int i = 0; i < write_buffer.count; i++) {
+        fprintf(fp, "%s\n", write_buffer.items[i].entry);
+    }
+    fclose(fp);
+    write_buffer.count = 0;
+}
+
+static void buffer_write(const char* vote_hash, float score, bool provisional) {
+    // Format: HASH | SCORE | FLAGS
+    snprintf(write_buffer.items[write_buffer.count].entry, 128, 
+             "%s|%.2f|%d", vote_hash, score, provisional ? 1 : 0);
+    
+    write_buffer.count++;
+    if (write_buffer.count >= BATCH_SIZE) {
+        CxD_FlushDisk();
+    }
+}
+
+// --- PUBLIC API IMPLEMENTATION ---
+
+int CxD_Init(const char* db_path, const char* pepper_key) {
+    printf("[CxD] Initializing Core Library v%s...\n", CXD_VERSION);
+    
+    // 1. Allocate Bloom Filter
+    bloom_filter = calloc(BLOOM_SIZE, sizeof(uint8_t));
+    if (!bloom_filter) return -1;
+
+    // 2. Set Config
+    strncpy(global_db_path, db_path, 255);
+    if (pepper_key) global_pepper = strdup(pepper_key);
+    else global_pepper = strdup("DEFAULT_INSECURE_PEPPER");
+
+    // 3. Rehydrate Bloom from Disk (Simplified)
+    FILE *fp = fopen(global_db_path, "r");
+    if (fp) {
+        char line[256];
+        int count = 0;
+        while (fgets(line, sizeof(line), fp)) {
+            // Parse Hash from log line (assuming Hash is first 64 chars)
+            // In a real implementation, we would decode hex to binary here
+            // and call bloom_set().
+            count++;
+        }
+        fclose(fp);
+        printf("[CxD] Rehydrated state with %d existing votes.\n", count);
+    }
+
+    return 0;
+}
+
+void CxD_Shutdown() {
+    CxD_FlushDisk();
+    if (bloom_filter) free(bloom_filter);
+    if (global_pepper) free(global_pepper);
+    printf("[CxD] Library Shutdown Complete.\n");
+}
+
+CxD_VoteResult CxD_ProcessVote(const char* device_uuid, const char* payload, const char* signature, CxD_GeoContext* geo) {
+    CxD_VoteResult result = {0};
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    char hex_hash[HASH_LEN];
+    float score = 0.0f;
+
+    // 1. HARDWARE ATTESTATION
+    // Verify signature (Mocked: checks if signature exists)
+    if (!signature || strlen(signature) < 10) {
+        result.accepted = false;
+        result.status_msg = "Invalid Hardware Signature";
+        return result; // Immediate Reject
+    }
+    score += W_HARDWARE;
+
+    // 2. PRIVACY-PRESERVING GEO CHECK
+    if (geo) {
+        if (verify_geofence(geo)) {
+            score += W_GEO;
+            score += (geo->ping_ms < 20 ? 1.0f : 0.5f) * W_PHYSICS;
+        }
+        // CRITICAL: Secure Wipe of Location Data
+        // We overwrite the memory provided by the caller to ensure 
+        // it doesn't linger in RAM if the caller forgets to free it.
+        memset(geo, 0, sizeof(CxD_GeoContext));
+        // Compiler barrier
+        __asm__ volatile("" : : "r"(geo) : "memory");
+    }
+
+    // 3. GENERATE SALT-HASH (ANONYMIZATION)
+    char salted_input[512];
+    snprintf(salted_input, sizeof(salted_input), "%s%s", device_uuid, global_pepper);
+    SHA256((unsigned char*)salted_input, strlen(salted_input), hash);
+    for(int i=0; i<SHA256_DIGEST_LENGTH; i++) sprintf(hex_hash + (i*2), "%02x", hash[i]);
+    hex_hash[64] = 0;
+    strcpy(result.vote_hash, hex_hash);
+
+    // 4. DUPLICATE CHECK (BLOOM FILTER)
+    // If it's in the bloom filter, we reject it to prevent spam.
+    // (In strict mode, we would fallback to disk search, but for speed we reject 'Maybe')
+    if (bloom_check(hash)) {
+        result.accepted = false;
+        result.status_msg = "Duplicate Vote Detected";
+        return result;
+    }
+
+    // 5. FINAL SCORING
+    result.confidence_score = score;
+    if (score >= THRESHOLD_AUDIT) {
+        result.accepted = true;
+        result.is_provisional = (score < THRESHOLD_CONFIRM);
+        result.status_msg = result.is_provisional ? "Accepted (Provisional)" : "Accepted (Confirmed)";
+        
+        // 6. PERSISTENCE
+        bloom_set(hash); // Update filter
+        buffer_write(hex_hash, score, result.is_provisional); // Write to disk buffer
+    } else {
+        result.accepted = false;
+        result.status_msg = "Rejected (Low Confidence)";
+    }
+
+    return result;
+}
