@@ -1,0 +1,114 @@
+#include <stdio.h>
+#include <math.h>
+#include <stdbool.h>
+
+// --- CONFIGURATION ---
+// Maximum allowed latency (Ping) in milliseconds.
+// Speed of light in fiber is ~200km/ms. 
+// A 50ms round-trip allows for ~5000km radius (generous), 
+// preventing votes from US/Europe/China but allowing local variation.
+#define MAX_LATENCY_MS 60 
+
+// --- GEOMETRY ENGINE ---
+
+typedef struct {
+    double lat;
+    double lon;
+} GeoPoint;
+
+// Simplified Polygon Boundary for Sri Lanka (Rough Approximation)
+// In production, use a detailed GeoJSON set of ~100 points.
+#define BORDER_POINTS 6
+GeoPoint sri_lanka_border[BORDER_POINTS] = {
+    {9.835, 80.046}, // Jaffna (North tip)
+    {8.575, 81.233}, // Trincomalee (East)
+    {6.949, 81.800}, // Kalmunai (South East)
+    {5.917, 80.500}, // Matara (South Tip)
+    {6.927, 79.861}, // Colombo (West)
+    {8.200, 79.600}  // Kalpitiya (North West)
+};
+
+// 1. Ray Casting Algorithm
+// Checks if a point is inside a polygon by shooting a "ray" to the right.
+// If it crosses the border an odd number of times, it's inside.
+bool is_inside_boundary(double voter_lat, double voter_lon) {
+    int i, j;
+    bool inside = false;
+    
+    for (i = 0, j = BORDER_POINTS - 1; i < BORDER_POINTS; j = i++) {
+        // Check if the ray crosses the line segment between point i and j
+        if (((sri_lanka_border[i].lat > voter_lat) != (sri_lanka_border[j].lat > voter_lat)) &&
+            (voter_lon < (sri_lanka_border[j].lon - sri_lanka_border[i].lon) * (voter_lat - sri_lanka_border[i].lat) / 
+            (sri_lanka_border[j].lat - sri_lanka_border[i].lat) + sri_lanka_border[i].lon)) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
+// --- PHYSICS ENGINE ---
+
+// 2. Latency Verification (Proof of Proximity)
+// You cannot cheat the speed of light.
+// VPNs mask IP, but they INCREASE latency. 
+// If a user claims to be in Colombo but ping is 200ms, they are likely proxied.
+bool verify_physical_proximity(int observed_latency_ms) {
+    if (observed_latency_ms < 0) return false; // Error state
+    
+    if (observed_latency_ms > MAX_LATENCY_MS) {
+        printf("[REJECT] Latency %dms too high for national boundary.\n", observed_latency_ms);
+        return false;
+    }
+    
+    return true;
+}
+
+// Integration Function to be called by cxd_node.c
+int validate_location_metadata(double lat, double lon, int ping_ms) {
+    printf("Validating Location: [%f, %f] | Ping: %dms\n", lat, lon, ping_ms);
+
+    // Step 1: Check Physics (Hardest to spoof)
+    if (!verify_physical_proximity(ping_ms)) {
+        return 0; // Failed Proximity
+    }
+
+    // Step 2: Check Geometry
+    if (!is_inside_boundary(lat, lon)) {
+        printf("[REJECT] GPS Coordinates outside Sri Lanka borders.\n");
+        return 0; // Failed Geofence
+    }
+
+    printf("[ACCEPT] Location Verified.\n");
+    return 1;
+}
+
+// Test Runner
+int main() {
+    printf("--- CxD GEOFENCE MODULE ---\n");
+    
+    // Test 1: Colombo (Inside)
+    validate_location_metadata(6.927, 79.861, 20); 
+    
+    // Test 2: London (Outside)
+    validate_location_metadata(51.507, -0.127, 150); 
+    
+    // Test 3: "Spoofed" Colombo (Correct GPS, but High Latency/VPN)
+    printf("--- Test: Spoofed Location via VPN ---\n");
+    validate_location_metadata(6.927, 79.861, 180); 
+
+    return 0;
+}
+
+
+### How to use this safely (Privacy Warning)
+
+Sending raw GPS coordinates (`6.927, 79.861`) to your server is dangerous. If the government seizes the server logs, they can see exactly which house voted "No".
+
+**The Privacy Fix:**
+Do **not** store the coordinates in the `cxd_votes.db`.
+1.  The Client sends GPS inside an encrypted envelope (HTTPS).
+2.  The Server (in RAM) runs `validate_location_metadata`.
+3.  The Server returns `1` (True) or `0` (False).
+4.  The Server **discards** the coordinates immediately and only writes the vote + the boolean result (`LocationVerified: True`) to the disk.
+
+This ensures you verify the location without creating a surveillance database.
