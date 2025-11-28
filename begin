@@ -2,31 +2,25 @@ import os
 import zipfile
 import stat
 
-# --- DEFINING FILE CONTENTS ---
+# --- 1. DEFINING THE FILE CONTENTS ---
 
 readme_content = """# CxD LKA: Digital Governance Infrastructure for Sri Lanka
 
-**CxD LKA** is an open-source, emergency digital governance framework designed to establish a "Shadow Constituent Assembly" or interim council support system during periods of governmental instability.
+**CxD LKA** is an open-source, emergency digital governance framework designed to establish a "Shadow Constituent Assembly" without human politicians.
 
 It operates on a **federated, tokenless architecture** utilizing donated cloud capacity, ensuring high availability and censorship resistance without the financial friction of gas fees.
 
+## 🗳️ Governance & Authority
+
+This repository is governed by the **Digital Constitution** (see `CONSTITUTION.md`).
+* **No Politicians**: Changes to ballot measures require random jury selection (Cryptographic Sortition).
+* **Automated Enforcement**: GitHub Actions block any PR modifying governance logic without multi-party verified sign-offs.
+
 ## 🏗 System Architecture
 
-The system is composed of three distinct layers:
-
-1. **The Client (Mobile PWA)**: A React-based Progressive Web App.
-   * **Zero-Knowledge UI**: Simulates Secure Enclave signing for anonymity.
-   * **Offline-First**: High-contrast, low-bandwidth design for unstable power grids.
-   * **UBI Wallet**: Integrated distribution mechanism for emergency digital aid.
-
-2. **The Node (Consensus Engine)**: A lightweight C server.
-   * **Federated Byzantine Agreement (FBA)**: Uses Quorum Slices to reach consensus without mining.
-   * **Hardware Attestation**: Verifies votes via device-bound keys (1 Device = 1 Vote) to prevent Sybil attacks.
-   * **Persistence**: Append-only log storage with salted hashing for privacy.
-
-3. **The Ops Layer (Azure/Docker)**:
-   * Automated deployment scripts for Azure Container Instances.
-   * Geo-redundant configurations optimized for South Asia (Central India region).
+1. **The Client (Mobile PWA)**: React-based, Zero-Knowledge UI, Offline-First.
+2. **The Node (Consensus)**: C-based FBA engine with Hardware Attestation.
+3. **The Ops Layer**: Azure deployment scripts for geo-redundant hosting.
 
 ## 🚀 Quick Start
 
@@ -37,24 +31,108 @@ npm install
 npm start
 ```
 
-### 2. Build the Server Node
+### 2. Build the Server
 ```bash
 cd server
 docker build -t cxd-node .
 docker run -p 80:80 cxd-node
 ```
 
-### 3. Deploy to Azure (Emergency Mode)
+### 3. Deploy to Azure
 ```bash
 cd ops
 ./deploy_national_emergency.sh
 ```
 """
 
+constitution_content = """# The Digital Constitution of CxD LKA
+
+**Preamble:**
+This repository holds the consensus logic for the automated governance of Sri Lanka. It operates on the principle of **Algorithmic Sovereignty**.
+
+## Article I: The Separation of Powers
+
+### Section 1. The Repository (The Executive)
+* The "Maintainers" (Tech Team) are functionaries, not leaders. They have the right to merge code related to *performance, UI, and security*.
+* The Maintainers **DO NOT** have the right to merge code that modifies:
+  * `PROPOSALS` (Ballot Measures)
+  * `DICTIONARY` (Language/Meaning)
+  * `UBI_LOGIC` (Financial Distribution)
+
+### Section 2. The Consensus (The Legislative)
+* **No Permanent Representatives**: There are no Senators, MPs, or Council Members.
+* **Cryptographic Sortition**: Changes to the governance files listed above require a **Juror Merge**.
+* A Juror Merge requires digital approval (Review Sign-offs) from **5 randomly selected Citizen Witnesses**.
+
+## Article II: The Right to Fork
+* The code must always remain Open Source (MIT License).
+* The community has the moral and technical right to "Fork" this system effectively dissolving the current government instance.
+
+## Article III: The Canary Clause (Anti-Coup Mechanism)
+* **The Dead Man's Switch**: If the repository does not receive a "Heartbeat" commit verifying protocol integrity every 30 days, the system enters "Read-Only Mode" automatically.
+
+*Ratified by the Sovereign Protocol, 2025.*
+"""
+
+governance_workflow_content = """name: Constitutional Governance Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, review_requested]
+
+jobs:
+  check-authority:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Identify Sensitive Changes
+        id: files
+        uses: jitterbit/get-changed-files@v1
+        with:
+          format: space-delimited
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enforce Juror Quorum
+        run: |
+          SENSITIVE_FILES="client/src/App.jsx server/cxd_node.c"
+          IS_SENSITIVE=false
+          for changed_file in ${{ steps.files.outputs.all }}; do
+            for sensitive in $SENSITIVE_FILES; do
+              if [[ "$changed_file" == *"$sensitive"* ]]; then
+                IS_SENSITIVE=true
+                echo "⚠️ ALERT: This PR attempts to modify Governance Logic ($changed_file)."
+                break
+              fi
+            done
+          done
+
+          if [ "$IS_SENSITIVE" = true ]; then
+            echo "🔍 Analyzing Review Sign-offs..."
+            APPROVAL_COUNT=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \\
+              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" \\
+              | jq '[.[] | select(.state == "APPROVED")] | length')
+
+            REQUIRED_APPROVALS=5
+            echo "Current Juror Approvals: $APPROVAL_COUNT / $REQUIRED_APPROVALS"
+            
+            if [ "$APPROVAL_COUNT" -lt "$REQUIRED_APPROVALS" ]; then
+              echo "❌ BLOCKING MERGE: Constitutional Violation."
+              echo "Reason: Modifications to Ballot Measures require $REQUIRED_APPROVALS random citizen witnesses."
+              exit 1
+            else
+              echo "✅ QUORUM MET: Governance change authorized."
+            fi
+          else
+            echo "✅ Standard Code Change: No quorum required."
+          fi
+"""
+
+# Latest Optimized React App
 app_jsx_content = """import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Fingerprint, Check, Shield, Globe, AlertTriangle, Wifi, Lock, Wallet, Clock, ArrowDownLeft, RefreshCw, ChevronLeft } from 'lucide-react';
 
-// --- STATIC DATA ---
 const PROPOSALS = [
   {
     id: "LKA-2025-001",
@@ -486,7 +564,7 @@ GEO_API_URL = "http://ip-api.com/json/"
 print("Map Generator Loaded.")
 """
 
-# --- DIRECTORY STRUCTURE ---
+# --- 2. DIRECTORY STRUCTURE ---
 
 project_name = "CxD_LKA_Project"
 dirs = [
@@ -494,21 +572,24 @@ dirs = [
     f"{project_name}/client/public",
     f"{project_name}/server",
     f"{project_name}/ops",
+    f"{project_name}/.github/workflows",
 ]
 
 for d in dirs:
     os.makedirs(d, exist_ok=True)
 
-# --- WRITING FILES ---
+# --- 3. WRITING FILES ---
 
 files = {
     f"{project_name}/README.md": readme_content,
+    f"{project_name}/CONSTITUTION.md": constitution_content,
     f"{project_name}/client/src/App.jsx": app_jsx_content,
     f"{project_name}/client/package.json": package_json_content,
     f"{project_name}/server/cxd_node.c": cxd_node_c_content,
     f"{project_name}/server/Dockerfile": dockerfile_content,
     f"{project_name}/ops/deploy_national_emergency.sh": deploy_sh_content,
     f"{project_name}/ops/cxd_vote_map.py": map_py_content,
+    f"{project_name}/.github/workflows/governance_check.yml": governance_workflow_content,
 }
 
 for path, content in files.items():
@@ -519,7 +600,7 @@ for path, content in files.items():
 st = os.stat(f"{project_name}/ops/deploy_national_emergency.sh")
 os.chmod(f"{project_name}/ops/deploy_national_emergency.sh", st.st_mode | stat.S_IEXEC)
 
-# --- CREATING ZIP ---
+# --- 4. CREATING ZIP ---
 
 zip_filename = f"{project_name}.zip"
 with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -529,3 +610,4 @@ with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
 
 print(f"✅ Success! Created {zip_filename}")
 print(f"You can now download {zip_filename} and deploy.")
+ 
