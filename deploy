@@ -1,0 +1,9 @@
+Next Step for Deployment
+
+To make this app accessible to citizens:
+
+Host it: You can host this React app on Vercel or Netlify for free (high availability CDN).
+
+Point it: Update the fetch() URL in the handleVote function to point to your Azure Container Instance IP address.
+
+This gives you a complete loop: Citizen (App) -> Cloud (C Server) -> Ledger (Disk).
