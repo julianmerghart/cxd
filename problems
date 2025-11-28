@@ -1,0 +1,51 @@
+The Digital Constitution of CxD
+
+Imagine a world without politcians!
+
+CxD is designed to be used alongside AI and the most powerful AI processing.  To maintain fairness and accuracy, there is a huge amount of AI and cloud infrastructure that is required.
+
+No human being should be in control of the system.  It is not designed for that purpose.
+
+The CxD system is designed for any region on Planet Earth where human beings have no government or live under a forced dictatorship.
+
+Preamble:
+
+This repository holds the consensus logic for the interim governance of Sri Lanka. Access to modify this code is a public trust, not a private right. To prevent the concentration of power and the rise of digital authoritarianism, all contributors and maintainers agree to the following immutable rules.
+
+Article I: The Separation of Powers
+
+Section 1. The Repository (The Executive)
+
+The "Maintainers" (Tech Team) have the right to merge code related to performance, UI, and security.
+
+The Maintainers DO NOT have the right to merge code that modifies:
+
+PROPOSALS (Ballot Measures)
+
+DICTIONARY (Language/Meaning)
+
+UBI_LOGIC (Financial Distribution)
+
+Section 2. The Consensus (The Legislative)
+
+Changes to the files listed above require a Quorum Merge.
+
+A Quorum Merge requires digital approval (Review Sign-offs) from at least 3 distinct, verified Council Members.
+
+No single individual, regardless of rank, may push directly to the main branch.
+
+Article II: The Right to Fork
+
+The code must always remain Open Source (MIT License).
+
+If the Maintainers act against the public interest, the "Canonical" status of this repository is automatically revoked.
+
+The community has the moral and technical right to "Fork" (copy) this system and migrate their Identity/UBI keys to the new instance.
+
+Article III: The Canary Clause (Anti-Coup Mechanism)
+
+The Dead Man's Switch: If the repository does not receive a "Heartbeat" commit verifying democratic integrity every 30 days, the system enters "Read-Only Mode" automatically.
+
+This prevents a captured government from secretly running the system indefinitely without public scrutiny.
+
+Ratified by the Interim Technocratic Council, 2025.v
