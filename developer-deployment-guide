@@ -1,0 +1,59 @@
+CxD Global Deployment & Regional Isolation Guide
+
+This guide ensures that developers can launch the CxD Governance Engine for their specific nation without risk of crosstalk, data leaks, or regional confusion.
+
+1. Regional Namespacing (The "No-Crosstalk" Rule)
+
+To prevent Madagascar data from mixing with Sri Lanka data, every deployment must define a unique REGION_ID.
+
+Action: Update App.jsx
+
+Locate the CONFIGURATION block and set the ISO-3166-1 alpha-3 code:
+
+Sri Lanka: LKA
+
+Madagascar: MDG
+
+Hispaniola: HSP
+
+Why this works:
+
+The REGION_ID is appended to the hardware UUID before hashing. This means a user's "Vote ID" in Madagascar is mathematically different from their "Vote ID" in Sri Lanka, even if they use the same phone.
+
+2. Infrastructure Isolation
+
+Never point multiple apps to the same consensus cluster.
+
+Unique API Endpoints: Every developer must deploy their own C-Node cluster. In App.jsx, the API_URL must point to the specific Azure Container Instance created by your deployment script.
+
+Azure Tagging: Our deployment scripts (ops/deploy.sh) automatically tag resources with country=CODE. Use these tags to monitor costs and traffic per region independently.
+
+3. The "Secret Pepper"
+
+The CXD_PEPPER environment variable in the C server is the ultimate firewall.
+
+Rule: Every nation MUST use a different 64-character random string for their pepper.
+
+If two countries use the same pepper, a hardware ID might produce the same hash. If they are different, crosstalk is mathematically impossible.
+
+4. Step-by-Step Launch Sequence
+
+Redraw the Land: Run python tools/nation_builder.py and type your country name. This updates the local map and geofence.
+
+Set the Dialect: Update ENABLED_LANGUAGES and DICTIONARY in App.jsx.
+
+Configure the Ballot: Update the PROPOSALS array with local issues.
+
+Deploy the Hub: Run ./ops/deploy_national_emergency.sh. Note the generated URL.
+
+Connect the App: Paste that URL into the App.jsx fetch logic.
+
+Distribute: Host the React App as a PWA (Progressive Web App).
+
+5. Avoiding Confusion in GitHub
+
+If you are managing multiple countries:
+
+Create separate branches (e.g., branch: madagascar, branch: sri-lanka).
+
+The CONSTITUTION.md should be updated per branch to reflect local juror requirements.
