@@ -1,0 +1,18 @@
+YAML
+version: '3.8'
+services:
+  cxd-node:
+    build: .
+    ports:
+      - "8443:8443"
+    # This physically mounts a RAM disk into the container
+    tmpfs:
+      - /mnt/cxd-secure:size=2G,mode=1777
+    restart: always
+
+  cxd-frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./cxd-pwa/build:/usr/share/nginx/html
