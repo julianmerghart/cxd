@@ -1,0 +1,66 @@
+To get the CxD system running in the cloud using Docker, you’ll follow a three-step process: preparing the files, setting up the server, and launching the containers.
+
+Since your project involves a C core and a React frontend, this method is the most "streamlined" because it handles the compilation and networking for you.
+
+Step 1: Prepare the Project Files
+On your local computer (where you write your code), ensure your folder structure looks like this:
+
+cxd-project/ (Main folder)
+
+Dockerfile (The blueprint for the C core)
+
+docker-compose.yml (The orchestrator)
+
+libcxd/ (Your C source code folder)
+
+cxd-pwa/ (Your React project folder)
+
+The Files
+
+Paste the code provided in our previous conversation into these two files.
+
+Dockerfile: This compiles your C library into a "container image."
+
+docker-compose.yml: This tells Docker to run the C engine and the React PWA side-by-side, and specifically creates the RAM disk for the "Wipe" protocol.
+
+Step 2: Provision a Server (The Cloud)
+Sign up for a provider (DigitalOcean, AWS, or Azure).
+
+Create an "Instance" or "Droplet":
+
+OS: Choose Ubuntu 24.04.
+
+Size: At least 2GB of RAM (since you are dedicating 2GB to the CxD RAM disk).
+
+Install Docker: Once you log into your server via terminal (SSH), run this "one-liner" to install everything:
+
+Bash
+curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
+Step 3: Launch the CxD System
+Now, you need to get your code onto that cloud server and start it.
+
+1. Upload your code
+
+The easiest way is to use Git. On your server:
+
+Bash
+git clone https://github.com/YourUsername/cxd-project.git
+cd cxd-project
+2. Build and Run
+
+This is the "magic" command. It reads the YAML file, builds the C library, sets up the RAM disk, and starts the web server:
+
+Bash
+sudo docker-compose up --build -d
+--build: Forces it to re-compile your C code.
+
+-d: "Detached" mode (runs in the background so it doesn't stop when you close your terminal).
+
+How to Manage Your Node
+Once it is running, you can use these commands to check on the system:
+
+Check Status: sudo docker-compose ps (Shows if the engine and frontend are "Up").
+
+View Logs: sudo docker-compose logs -f cxd-node (Watch the libcxd engine process votes in real-time).
+
+Stop Everything: sudo docker-compose down (This will automatically wipe the RAM disk, destroying any transient data as per your protocol).
