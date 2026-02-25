@@ -1,0 +1,21 @@
+# Use a slim version of Ubuntu for a smaller footprint
+FROM ubuntu:24.04
+
+# Install only what's needed for the C library to run
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/
+
+# Set working directory to the RAM disk (mapped via Compose)
+WORKDIR /mnt/cxd-secure
+
+# Copy and build your C library
+COPY ./libcxd ./libcxd
+RUN cd ./libcxd && make build
+
+# Expose the federation and API ports
+EXPOSE 8443 443
+
+# Run the node
+CMD ["./libcxd/cxd-node", "--start"]
