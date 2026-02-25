@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# 1. System Updates & Dependencies
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y build-essential gcc libssl-dev git nginx ufw
+
+# 2. Privacy-First: Create the RAM Disk (tmpfs)
+# This ensures that user data never touches the physical SSD/HDD
+mkdir -p /mnt/cxd-secure
+mount -t tmpfs -o size=2G tmpfs /mnt/cxd-secure
+echo 'tmpfs /mnt/cxd-secure tmpfs nodev,nosuid,noexec,nodiratime,size=2G 0 0' >> /etc/fstab
+
+# 3. Security: Basic Firewall Setup
+ufw allow 22/tcp   # SSH
+ufw allow 80/tcp   # HTTP (PWA)
+ufw allow 443/tcp  # HTTPS (PWA/API)
+ufw allow 8443/tcp # CxD Federation Port
+ufw --force enable
+
+# 4. Clone and Build the C Core in RAM
+cd /mnt/cxd-secure
+git clone https://github.com/JulianMerghart/libcxd.git
+cd libcxd
+# Replace 'make build' with your actual compilation command
+make build 
+
+# 5. Background Service Configuration
+# Create a systemd service to keep the node running
+cat <<EOF > /etc/systemd/system/cxd-node.service
+[Unit]
+Description=CxD Federated Governance Node
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/cxd-secure/libcxd
+ExecStart=/mnt/cxd-secure/libcxd/cxd-node --start
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable cxd-node
+systemctl start cxd-node
+
+# 6. Final Clean up
+# Remove command history to protect the donor's session
+history -c
